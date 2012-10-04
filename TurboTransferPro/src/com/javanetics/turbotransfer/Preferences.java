@@ -91,7 +91,7 @@ public class Preferences extends JFrame {
 		// frequently used components, e.g. separators and labels.
 
 		// Add a titled separator to cell (1, 1) that spans 7 columns.
-		builder.addLabel("Sort by:",       cc.xy (1,  1));
+		builder.addLabel(Localizer.sharedLocalizer().localizedString("SortBy")+":",       cc.xy (1,  1));
 		JComboBox sort = new JComboBox();
 		String[] description = { 
 				Localizer.sharedLocalizer().localizedString("SortNameAsc"), 
@@ -102,7 +102,7 @@ public class Preferences extends JFrame {
 	        sort.addItem(description[i]);
 
 		builder.add(sort,         cc.xy(3,  1));
-		builder.addLabel("Resize images to:",  	     cc.xy (1,  3));
+		builder.addLabel(Localizer.sharedLocalizer().localizedString("ResizeImagesTo")+":",  	     cc.xy (1,  3));
 		JComboBox resize = new JComboBox();
 		String[] sizes = { 
 				Localizer.sharedLocalizer().localizedString("SizeFull"), 
