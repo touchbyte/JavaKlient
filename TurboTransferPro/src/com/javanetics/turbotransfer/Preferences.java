@@ -9,12 +9,17 @@ import java.awt.HeadlessException;
 import java.awt.event.KeyEvent;
 
 import javax.swing.ImageIcon;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 import javax.swing.border.EmptyBorder;
+
+import com.jgoodies.forms.builder.PanelBuilder;
+import com.jgoodies.forms.layout.CellConstraints;
+import com.jgoodies.forms.layout.FormLayout;
 
 public class Preferences extends JFrame {
 	private static Preferences prefs;
@@ -66,11 +71,51 @@ public class Preferences extends JFrame {
 		tabbedPane.addTab("", createImageIcon("/images/Receive.png"), panel2, Localizer.sharedLocalizer().localizedString("Receive"));
 		tabbedPane.setMnemonicAt(1, KeyEvent.VK_2);
 
-		JComponent panel3 = makeTextPanel("Panel #3");
-		tabbedPane.addTab("", createImageIcon("/images/Send.png"), panel3, Localizer.sharedLocalizer().localizedString("Send"));
+		tabbedPane.addTab("", createImageIcon("/images/Send.png"), panelSend(), Localizer.sharedLocalizer().localizedString("Send"));
+		tabbedPane.setSize(400, 400);
 		tabbedPane.setMnemonicAt(2, KeyEvent.VK_3);
 
 		content.add(tabbedPane);
+	}
+	
+	protected JPanel panelSend()
+	{
+		FormLayout layout = new FormLayout(
+			    "right:pref, 10px, pref", 
+			    "p, 10px, p");      
+			PanelBuilder builder = new PanelBuilder(layout);
+			builder.setDefaultDialogBorder();
+			CellConstraints cc = new CellConstraints();
+
+		// Fill the grid with components; the builder can create
+		// frequently used components, e.g. separators and labels.
+
+		// Add a titled separator to cell (1, 1) that spans 7 columns.
+		builder.addLabel("Sort by:",       cc.xy (1,  1));
+		JComboBox sort = new JComboBox();
+		String[] description = { 
+				Localizer.sharedLocalizer().localizedString("SortNameAsc"), 
+				Localizer.sharedLocalizer().localizedString("SortNameDesc"), 
+				Localizer.sharedLocalizer().localizedString("SortDateAsc"), 
+				Localizer.sharedLocalizer().localizedString("SortDateDesc") };
+	    for (int i = 0; i < description.length; i++)
+	        sort.addItem(description[i]);
+
+		builder.add(sort,         cc.xy(3,  1));
+		builder.addLabel("Resize images to:",  	     cc.xy (1,  3));
+		JComboBox resize = new JComboBox();
+		String[] sizes = { 
+				Localizer.sharedLocalizer().localizedString("SizeFull"), 
+				Localizer.sharedLocalizer().localizedString("Size1920"), 
+				Localizer.sharedLocalizer().localizedString("Size1280"), 
+				Localizer.sharedLocalizer().localizedString("Size1024"),
+				Localizer.sharedLocalizer().localizedString("Size800") };
+	    for (int i = 0; i < sizes.length; i++)
+	    	resize.addItem(sizes[i]);
+		builder.add(resize,         cc.xy(3,  3));
+
+		// The builder holds the layout container that we now return.
+		return builder.getPanel();
 	}
 
 	protected JComponent makeTextPanel(String text) 
