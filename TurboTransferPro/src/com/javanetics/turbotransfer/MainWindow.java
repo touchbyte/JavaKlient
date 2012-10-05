@@ -1,18 +1,24 @@
 package com.javanetics.turbotransfer;
 
 import java.awt.Container;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
 import java.awt.GraphicsConfiguration;
 import java.awt.GridLayout;
 import java.awt.HeadlessException;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
+import java.awt.geom.Rectangle2D;
 
 import javax.jmdns.JmmDNS;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
+import javax.swing.SwingConstants;
 import javax.swing.UIManager;
 
 public class MainWindow extends JFrame {
@@ -37,9 +43,22 @@ public class MainWindow extends JFrame {
 
 		Container content = getContentPane();
 		content.setLayout(new GridLayout(1, 1));
+		
+		JLabel ddlabel = new JLabel(Localizer.sharedLocalizer().localizedString("DDHere"), SwingConstants.CENTER);
+		content.add(ddlabel);
+
+		new FileDrop( content, new FileDrop.Listener() {
+			public void filesDropped( java.io.File[] files )
+		 {
+				Browser.sharedBrowser().setFilesToTransfer(files);
+				Browser.sharedBrowser().setVisible(true);
+		 }
+		 });
+		
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setLocation(100, 100);
 		setSize(600, 400);
+
 		this.setVisible(true);
 
 		// A menu-bar contains menus. A menu contains menu-items (or sub-Menu)

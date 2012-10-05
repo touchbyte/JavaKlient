@@ -24,7 +24,15 @@ public class Localizer {
 	
 	public String localizedString(String s)
 	{
-		return rb.getString(s);
+		String res = rb.getString(s);
+		if (null != res)
+		{
+			return res;
+		}
+		else
+		{
+			return s;
+		}
 	}
 
 }
