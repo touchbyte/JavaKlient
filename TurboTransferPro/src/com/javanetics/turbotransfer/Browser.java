@@ -59,7 +59,10 @@ import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.table.AbstractTableModel;
 
+import org.jdesktop.swingx.JXBusyLabel;
+
 import com.jgoodies.forms.builder.PanelBuilder;
+import com.jgoodies.forms.factories.Borders;
 import com.jgoodies.forms.layout.CellConstraints;
 import com.jgoodies.forms.layout.FormLayout;
 
@@ -82,10 +85,13 @@ public class Browser extends JFrame implements ServiceListener,
 
 	// Vector headers;
 	DefaultListModel services;
-	JList serviceList;
+	JTable table;
 	JTextArea info;
+	JXBusyLabel busyIndicator;
+	JLabel devicesFound;
 	int count = 0;
-
+	private ServiceInfo selectedService;
+	
 	private Browser() throws IOException
 	{
 		super(Localizer.sharedLocalizer().localizedString("SelectDevice"));
@@ -93,12 +99,11 @@ public class Browser extends JFrame implements ServiceListener,
 		Color bg = new Color(230, 230, 230);
 		EmptyBorder border = new EmptyBorder(5, 5, 5, 5);
 		Container content = getContentPane();
-		content.setLayout(new GridLayout(1, 3));
-
-		FormLayout layout = new FormLayout("80px, 8px, 40px, 8px, 160px, 20px, 100px, 10px, 100px", // columns
+				
+		FormLayout layout = new FormLayout("80px, 8px, 40px, 8px, 160px, 20px, 100px, 10px, 70px, right:30px", // columns
 				"top:15px, top:80px, 8px, p, 8px, p, 8px, p, 14px, p"); // rows
 		PanelBuilder builder = new PanelBuilder(layout);
-		builder.setDefaultDialogBorder();
+		builder.border(Borders.DIALOG);
 		CellConstraints cc = new CellConstraints();
 		JLabel picLabel = new JLabel(createImageIcon("/images/browsericon.png"));
 		builder.add(picLabel, cc.xywh(1, 1, 1, 2));
@@ -113,7 +118,7 @@ public class Browser extends JFrame implements ServiceListener,
 				"SelectTheDevice")+"</html>");
 		builder.add(
 				instructions,
-				cc.xyw(3, 2, 7));
+				cc.xyw(3, 2, 8));
 		
 		builder.addLabel(
 				Localizer.sharedLocalizer().localizedString("SearchForDevices"),
@@ -131,51 +136,36 @@ public class Browser extends JFrame implements ServiceListener,
 				Localizer.sharedLocalizer().localizedString("Type") };
 		Object[][] data = new Object[][] {};
 		servicesTableModel = new ServicesTableModel(data, columnNames);
-		JTable table = new JTable(servicesTableModel);
+		table = new JTable(servicesTableModel);
 		table.setPreferredScrollableViewportSize(new Dimension(500, 150));
+		table.setBackground(Color.WHITE);
+		table.getSelectionModel().addListSelectionListener(this);
 		// table.setFillsViewportHeight(true);
 		JScrollPane scrollPane = new JScrollPane(table);
 		scrollPane
 				.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 		scrollPane
 				.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-		builder.add(scrollPane, cc.xyw(1, 6, 9));
+		scrollPane.setBackground(Color.WHITE);
+		scrollPane.getViewport().setBackground(Color.WHITE);
+		builder.add(scrollPane, cc.xyw(1, 6, 10));
 
-		services = new DefaultListModel();
-		serviceList = new JList(services);
-		serviceList.setBorder(border);
-		serviceList.setBackground(bg);
-		serviceList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-		serviceList.addListSelectionListener(this);
+		devicesFound = new JLabel();
+		devicesFound.setFont(new Font("Helvetica", Font.PLAIN, 12));
+		devicesFound.setText("");
+	  builder.add(devicesFound, cc.xyw(1, 8, 5));
 
-		JPanel servicePanel = new JPanel();
-		servicePanel.setLayout(new BorderLayout());
-		servicePanel.add("North", new JLabel("Services"));
-		servicePanel.add("Center", new JScrollPane(serviceList,
-				JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-				JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED));
-		// content.add(servicePanel);
-
-		info = new JTextArea();
-		info.setBorder(border);
-		info.setBackground(bg);
-		info.setEditable(false);
-		info.setLineWrap(true);
-
-		JPanel infoPanel = new JPanel();
-		infoPanel.setLayout(new BorderLayout());
-		infoPanel.add("North", new JLabel("Details"));
-		infoPanel.add("Center", new JScrollPane(info,
-				JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-				JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED));
-		// content.add(infoPanel);
-
+	  busyIndicator = new JXBusyLabel();
+	  busyIndicator.setToolTipText(Localizer.sharedLocalizer().localizedString("SearchingForDevices"));
+	  busyIndicator.setBusy(true);
+	  builder.add(busyIndicator, cc.xy(10, 8));
+		
 		JButton cancelButton = new JButton();
 		cancelButton.setText(Localizer.sharedLocalizer().localizedString("Cancel"));
 		builder.add(cancelButton, cc.xy(7, 10));
 		JButton sendButton = new JButton();
 		sendButton.setText(Localizer.sharedLocalizer().localizedString("Send"));
-		builder.add(sendButton, cc.xy(9, 10));
+		builder.add(sendButton, cc.xyw(9, 10, 2));
 
 		content.add(builder.getPanel());
 		setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
@@ -301,7 +291,6 @@ public class Browser extends JFrame implements ServiceListener,
 		System.out.println("RESOLVED: " + name);
 		final ServiceInfo[] serviceInfos = this.jmmdns.getServiceInfos(Prefs
 				.sharedPrefs().getAppPrefs().get(Prefs.PREF_SERVICE_TYPE, ""), name);
-		// this.dislayInfo(serviceInfos);
 		SwingUtilities.invokeLater(new Runnable()
 		{
 			@Override
@@ -393,6 +382,7 @@ public class Browser extends JFrame implements ServiceListener,
 				model.addRow(new Object[] { value, info });
 			}
 		}
+		updateDevicesFoundText();
 	}
 
 	void removeRowWithValue(ServicesTableModel model, String value)
@@ -403,126 +393,57 @@ public class Browser extends JFrame implements ServiceListener,
 			if (result == 0)
 			{
 				model.removeRow(i);
+				break;
 			}
 		}
-	}
+		updateDevicesFoundText();
+		table.clearSelection();
+		setSelectedService(null);
+}
 
-	/**
-	 * List selection changed.
-	 * 
-	 * @param e
-	 */
-	@Override
-	public void valueChanged(ListSelectionEvent e)
+	protected void updateDevicesFoundText()
 	{
-		/*
-		 * if (!e.getValueIsAdjusting()) { if (e.getSource() == serviceList) {
-		 * String name = (String) serviceList.getSelectedValue();
-		 * System.out.println("VALUE CHANGED: type: " +
-		 * Prefs.sharedPrefs().getAppPrefs().get(Prefs.PREF_SERVICE_TYPE, "") +
-		 * " service: " + name); if (name == null) { info.setText(""); } else {
-		 * ServiceInfo[] serviceInfos =
-		 * this.jmmdns.getServiceInfos(Prefs.sharedPrefs
-		 * ().getAppPrefs().get(Prefs.PREF_SERVICE_TYPE, ""), name); // This is
-		 * actually redundant. getServiceInfo will force the resolution of the
-		 * service and call serviceResolved this.dislayInfo(serviceInfos); } } }
-		 */
-	}
-
-	private void dislayInfo(ServiceInfo[] serviceInfos)
-	{
-		if (serviceInfos.length == 0)
+		if (table.getModel().getRowCount() > 1)
 		{
-			System.out.println("INFO: null");
-			info.setText("service not found\n");
+			devicesFound.setText(String.format(Localizer.sharedLocalizer().localizedString("NDevicesFound"), table.getModel().getRowCount()));
+		}
+		else if (table.getModel().getRowCount() == 1)
+		{
+			devicesFound.setText(Localizer.sharedLocalizer().localizedString("OneDeviceFound"));
 		}
 		else
 		{
-			StringBuilder buf = new StringBuilder(2048);
-			System.out.println("INFO: " + serviceInfos.length);
-			for (ServiceInfo service : serviceInfos)
-			{
-				System.out.println("INFO: " + service);
-				buf.append(service.getName());
-				buf.append('.');
-				buf.append(service.getTypeWithSubtype());
-				buf.append('\n');
-				buf.append(service.getServer());
-				buf.append(':');
-				buf.append(service.getPort());
-				buf.append('\n');
-				for (InetAddress address : service.getInetAddresses())
-				{
-					buf.append(address);
-					buf.append(':');
-					buf.append(service.getPort());
-					buf.append('\n');
-				}
-				for (Enumeration<String> names = service.getPropertyNames(); names
-						.hasMoreElements();)
-				{
-					String prop = names.nextElement();
-					buf.append(prop);
-					buf.append('=');
-					buf.append(service.getPropertyString(prop));
-					buf.append('\n');
-				}
-				buf.append("------------------------\n");
-			}
-			this.info.setText(buf.toString());
+			devicesFound.setText("");
 		}
 	}
-
-	/**
-	 * Table data.
-	 */
-	class ServiceTableModel extends AbstractTableModel
-	{
-		/**
-		 *
-		 */
-		private static final long serialVersionUID = 5607994569609827570L;
-
-		@Override
-		public String getColumnName(int column)
-		{
-			switch (column)
-			{
-				case 0:
-					return "service";
-				case 1:
-					return "address";
-				case 2:
-					return "port";
-				case 3:
-					return "text";
-			}
-			return null;
-		}
-
-		@Override
-		public int getColumnCount()
-		{
-			return 1;
-		}
-
-		@Override
-		public int getRowCount()
-		{
-			return services.size();
-		}
-
-		@Override
-		public Object getValueAt(int row, int col)
-		{
-			return services.elementAt(row);
-		}
-	}
-
+	
 	@Override
 	public String toString()
 	{
 		return "RVBROWSER";
+	}
+	
+	protected void setSelectedService(ServiceInfo service)
+	{
+		selectedService = service;
+		if (null != selectedService)
+		{
+			
+		}
+	}
+
+	@Override
+	public void valueChanged(ListSelectionEvent e)
+	{
+		int row = table.getSelectedRow();
+		if (row > -1)
+		{
+			setSelectedService((ServiceInfo) table.getModel().getValueAt(row, 1));
+		}
+		else
+		{
+			setSelectedService(null);
+		}
 	}
 
 }
