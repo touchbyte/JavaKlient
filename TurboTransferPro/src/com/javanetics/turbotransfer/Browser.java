@@ -18,19 +18,15 @@
 
 package com.javanetics.turbotransfer;
 
-import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.Font;
-import java.awt.GridLayout;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.KeyEvent;
+import java.awt.event.ItemEvent;
+import java.awt.event.ItemListener;
 import java.io.File;
 import java.io.IOException;
-import java.net.InetAddress;
-import java.util.Enumeration;
+import java.util.ArrayList;
 
 import javax.jmdns.JmmDNS;
 import javax.jmdns.ServiceEvent;
@@ -43,23 +39,27 @@ import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
-import javax.swing.JList;
-import javax.swing.JMenu;
-import javax.swing.JMenuBar;
-import javax.swing.JMenuItem;
-import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
-import javax.swing.table.AbstractTableModel;
+
+import org.eclipse.jetty.client.Address;
+import org.eclipse.jetty.client.ContentExchange;
+import org.eclipse.jetty.client.HttpClient;
+import org.eclipse.jetty.client.HttpExchange;
+import org.eclipse.jetty.io.ByteArrayBuffer;
+import org.eclipse.jetty.server.Response;
 
 import org.jdesktop.swingx.JXBusyLabel;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.json.JSONTokener;
 
 import com.jgoodies.forms.builder.PanelBuilder;
 import com.jgoodies.forms.factories.Borders;
@@ -72,7 +72,7 @@ import com.jgoodies.forms.layout.FormLayout;
  * @author Arthur van Hoff, Werner Randelshofer
  */
 public class Browser extends JFrame implements ServiceListener,
-		ServiceTypeListener, ListSelectionListener
+		ServiceTypeListener, ListSelectionListener, ItemListener
 {
 	/**
 	 *
@@ -82,6 +82,7 @@ public class Browser extends JFrame implements ServiceListener,
 	JmmDNS jmmdns;
 	File[] filesToTransfer;
 	ServicesTableModel servicesTableModel;
+	ArrayList<PhotoAlbum> albums;
 
 	// Vector headers;
 	DefaultListModel services;
@@ -89,6 +90,9 @@ public class Browser extends JFrame implements ServiceListener,
 	JTextArea info;
 	JXBusyLabel busyIndicator;
 	JLabel devicesFound;
+	JComboBox serviceAlbums;
+	JLabel serviceAlbumsTitle;
+	PhotoAlbum selectedAlbum;
 	int count = 0;
 	private ServiceInfo selectedService;
 	
@@ -96,6 +100,7 @@ public class Browser extends JFrame implements ServiceListener,
 	{
 		super(Localizer.sharedLocalizer().localizedString("SelectDevice"));
 		this.jmmdns = JmmDNS.Factory.getInstance();
+		albums = new ArrayList<PhotoAlbum>();
 		Color bg = new Color(230, 230, 230);
 		EmptyBorder border = new EmptyBorder(5, 5, 5, 5);
 		Container content = getContentPane();
@@ -140,6 +145,7 @@ public class Browser extends JFrame implements ServiceListener,
 		table.setPreferredScrollableViewportSize(new Dimension(500, 150));
 		table.setBackground(Color.WHITE);
 		table.getSelectionModel().addListSelectionListener(this);
+		table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 		// table.setFillsViewportHeight(true);
 		JScrollPane scrollPane = new JScrollPane(table);
 		scrollPane
@@ -160,6 +166,17 @@ public class Browser extends JFrame implements ServiceListener,
 	  busyIndicator.setBusy(true);
 	  builder.add(busyIndicator, cc.xy(10, 8));
 		
+	  serviceAlbumsTitle = new JLabel();
+	  serviceAlbumsTitle.setText(Localizer.sharedLocalizer().localizedString("Album") + ":");
+		builder.add(serviceAlbumsTitle, cc.xy(1, 10));
+	  
+	  serviceAlbums = new JComboBox();
+	  serviceAlbums.addItemListener(this);
+		builder.add(serviceAlbums, cc.xyw(3, 10, 3));
+
+  	serviceAlbums.setVisible(false);
+  	serviceAlbumsTitle.setVisible(false);
+
 		JButton cancelButton = new JButton();
 		cancelButton.setText(Localizer.sharedLocalizer().localizedString("Cancel"));
 		builder.add(cancelButton, cc.xy(7, 10));
@@ -393,13 +410,13 @@ public class Browser extends JFrame implements ServiceListener,
 			if (result == 0)
 			{
 				model.removeRow(i);
+				updateDevicesFoundText();
+				table.clearSelection();
+				setSelectedService(null);
 				break;
 			}
 		}
-		updateDevicesFoundText();
-		table.clearSelection();
-		setSelectedService(null);
-}
+	}
 
 	protected void updateDevicesFoundText()
 	{
@@ -428,7 +445,73 @@ public class Browser extends JFrame implements ServiceListener,
 		selectedService = service;
 		if (null != selectedService)
 		{
-			
+    	String address = HttpUtils.sharedHttpUtils().getRequestRoot(service);
+    	address += Prefs.PATH_ALBUMLIST;
+    	HttpClient client = new HttpClient();
+    	//client.setConnectorType(HttpClient.CONNECTOR_SELECT_CHANNEL);
+    	try
+			{
+    		albums.clear();
+    		albums.add(new PhotoAlbum("", Localizer.sharedLocalizer().localizedString("LoadingList"), 0));
+    		setServiceAlbums();
+      	serviceAlbums.setVisible(true);
+      	serviceAlbumsTitle.setVisible(true);
+    		client.start();
+	    	//AlbumListExchange exchange = new AlbumListExchange(false);
+	      ContentExchange exchange = new ContentExchange(false)
+	      {
+	          protected void onResponseComplete() throws IOException
+	          {
+	              int status = getResponseStatus();
+	              if (status == 200 && getResponseContent().startsWith("["))
+	              {
+	              	if (selectedService.getServer().equals(getAddress().getHost())) // only if the selected service is still the one which initiated this request
+	              	{
+		              	JSONTokener tokener = new JSONTokener(getResponseContent());
+		              	try
+										{
+											JSONArray arr = new JSONArray(tokener);
+											if (arr.length() > 0)
+											{
+												for (int i = 0; i < arr.length(); i++)
+												{
+													JSONObject obj = arr.getJSONObject(i);
+													albums.add(new PhotoAlbum(obj.getString("id"), obj.getString("name"), obj.getInt("roll")));
+												}
+											}
+										}
+										catch (JSONException e)
+										{
+											// TODO Auto-generated catch block
+											e.printStackTrace();
+										}
+		              	albums.remove(0);
+		            		setServiceAlbums();
+	              	}
+	              	else
+	              	{
+	              		System.out.println("server " + selectedService.getServer() + " was not equal to " + getAddress().getHost());
+	              		return;
+	              	}
+	              }
+	              else
+	              {
+	              	serviceAlbums.setVisible(false);
+	              	serviceAlbumsTitle.setVisible(false);
+	              }
+	          }
+	      };
+	    	exchange.setMethod("PUT");
+	    	exchange.setRequestContent(new ByteArrayBuffer("get albums".getBytes()));
+	    	exchange.setRequestContentType("application/json");
+	      exchange.setURL(address);
+	      client.send(exchange);
+			}
+			catch (Exception e)
+			{
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
 	}
 
@@ -438,12 +521,42 @@ public class Browser extends JFrame implements ServiceListener,
 		int row = table.getSelectedRow();
 		if (row > -1)
 		{
-			setSelectedService((ServiceInfo) table.getModel().getValueAt(row, 1));
+			setSelectedService(((ServicesTableModel) table.getModel()).getServiceInfoAt(row));
 		}
 		else
 		{
 			setSelectedService(null);
+    	serviceAlbums.setVisible(false);
+    	serviceAlbumsTitle.setVisible(false);
 		}
+	}
+	
+	protected void setServiceAlbums()
+	{
+		serviceAlbums.removeAllItems();
+		for (int i = 0; i < albums.size(); i++)
+		{
+			PhotoAlbum album = albums.get(i);
+			serviceAlbums.addItem(album);
+			if (1 == album.getRoll()) serviceAlbums.setSelectedIndex(i);
+		}
+		if (0 == albums.size())
+		{
+    	serviceAlbums.setVisible(false);
+    	serviceAlbumsTitle.setVisible(false);
+		}
+	}
+
+	@Override
+	public void itemStateChanged(ItemEvent arg0)
+	{
+    if (arg0.getStateChange() == ItemEvent.SELECTED) {
+      selectedAlbum = (PhotoAlbum)serviceAlbums.getSelectedItem();
+    }
+    else
+    {
+    	selectedAlbum = null;
+    }
 	}
 
 }
