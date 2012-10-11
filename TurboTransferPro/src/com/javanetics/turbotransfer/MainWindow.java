@@ -1,18 +1,16 @@
 package com.javanetics.turbotransfer;
 
 import java.awt.Container;
-import java.awt.Font;
-import java.awt.FontMetrics;
-import java.awt.Graphics;
 import java.awt.GraphicsConfiguration;
 import java.awt.GridLayout;
 import java.awt.HeadlessException;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
-import java.awt.geom.Rectangle2D;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
 
-import javax.jmdns.JmmDNS;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
@@ -20,6 +18,10 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.SwingConstants;
 import javax.swing.UIManager;
+
+import org.apache.sanselan.ImageFormat;
+import org.apache.sanselan.ImageReadException;
+import org.apache.sanselan.Sanselan;
 
 public class MainWindow extends JFrame {
 
@@ -50,8 +52,33 @@ public class MainWindow extends JFrame {
 		new FileDrop( content, new FileDrop.Listener() {
 			public void filesDropped( java.io.File[] files )
 		 {
-				Browser.sharedBrowser().setFilesToTransfer(files);
-				Browser.sharedBrowser().setVisible(true);
+				ArrayList<File> mediafiles = new ArrayList<File>();
+				for (int i = 0; i < files.length; i++)
+				{
+					try
+					{
+						ImageFormat format = Sanselan.guessFormat(files[i]); 
+						if (null != format && !format.IMAGE_FORMAT_UNKNOWN.equals(format))
+						{
+							mediafiles.add(files[i]);
+						}
+					}
+					catch (ImageReadException e)
+					{
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+					catch (IOException e)
+					{
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				}
+				if (mediafiles.size() > 0)
+				{
+					Browser.sharedBrowser().setFilesToTransfer(mediafiles);
+					Browser.sharedBrowser().setVisible(true);
+				}
 		 }
 		 });
 		

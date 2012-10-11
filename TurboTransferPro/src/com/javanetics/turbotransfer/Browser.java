@@ -22,8 +22,12 @@ import java.awt.Color;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.Toolkit;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
+import java.awt.event.WindowEvent;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -80,7 +84,7 @@ public class Browser extends JFrame implements ServiceListener,
 	private static final long serialVersionUID = 5750114542524415107L;
 	private static Browser browser;
 	JmmDNS jmmdns;
-	File[] filesToTransfer;
+	ArrayList<File> filesToTransfer;
 	ServicesTableModel servicesTableModel;
 	ArrayList<PhotoAlbum> albums;
 
@@ -93,8 +97,11 @@ public class Browser extends JFrame implements ServiceListener,
 	JComboBox serviceAlbums;
 	JLabel serviceAlbumsTitle;
 	PhotoAlbum selectedAlbum;
+	JButton sendButton;
 	int count = 0;
 	private ServiceInfo selectedService;
+	private ServiceInfo transferService;
+	private int transferCount;
 	
 	private Browser() throws IOException
 	{
@@ -179,13 +186,26 @@ public class Browser extends JFrame implements ServiceListener,
 
 		JButton cancelButton = new JButton();
 		cancelButton.setText(Localizer.sharedLocalizer().localizedString("Cancel"));
+		cancelButton.addActionListener(new ActionListener() {
+      public void actionPerformed(ActionEvent e)
+      {
+      	closeWindow();
+      }
+		});      
 		builder.add(cancelButton, cc.xy(7, 10));
-		JButton sendButton = new JButton();
+		sendButton = new JButton();
 		sendButton.setText(Localizer.sharedLocalizer().localizedString("Send"));
+		sendButton.addActionListener(new ActionListener() {
+      public void actionPerformed(ActionEvent e)
+      {
+      	startSending();
+      }
+		});      
+		sendButton.setEnabled(false);
 		builder.add(sendButton, cc.xyw(9, 10, 2));
 
 		content.add(builder.getPanel());
-		setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
+		setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 		setLocation(100, 100);
 		// setSize(600, 400);
 
@@ -206,6 +226,12 @@ public class Browser extends JFrame implements ServiceListener,
 		 * for (int i = 0; i < list.length; i++) {
 		 * this.jmmdns.registerServiceType(list[i]); }
 		 */
+	}
+	
+	protected void closeWindow()
+	{
+  	WindowEvent closingEvent = new WindowEvent(this, WindowEvent.WINDOW_CLOSING);
+  	Toolkit.getDefaultToolkit().getSystemEventQueue().postEvent(closingEvent);
 	}
 
 	protected static ImageIcon createImageIcon(String path) 
@@ -237,17 +263,17 @@ public class Browser extends JFrame implements ServiceListener,
 		return browser;
 	}
 
-	public File[] getFilesToTransfer()
+	public ArrayList<File> getFilesToTransfer()
 	{
 		return filesToTransfer;
 	}
 
-	public void setFilesToTransfer(File[] filesToTransfer)
+	public void setFilesToTransfer(ArrayList<File> filesToTransfer)
 	{
 		this.filesToTransfer = filesToTransfer;
-		for (int i = 0; i < this.filesToTransfer.length; i++)
+		for (int i = 0; i < this.filesToTransfer.size(); i++)
 		{
-			System.out.println(this.filesToTransfer[i].getAbsolutePath());
+			System.out.println(this.filesToTransfer.get(i).getAbsolutePath());
 		}
 	}
 
@@ -552,11 +578,18 @@ public class Browser extends JFrame implements ServiceListener,
 	{
     if (arg0.getStateChange() == ItemEvent.SELECTED) {
       selectedAlbum = (PhotoAlbum)serviceAlbums.getSelectedItem();
+  		sendButton.setEnabled(true);
     }
     else
     {
     	selectedAlbum = null;
+  		sendButton.setEnabled(false);
     }
 	}
-
+	
+	protected void startSending()
+	{
+		closeWindow();
+		TransferWindow transfer = new TransferWindow(selectedService.getName(), selectedService, filesToTransfer);
+	}
 }
