@@ -86,7 +86,7 @@ public class Browser extends JFrame implements ServiceListener,
 	JmmDNS jmmdns;
 	ArrayList<File> filesToTransfer;
 	ServicesTableModel servicesTableModel;
-	ArrayList<PhotoAlbum> albums;
+	ArrayList<TargetAlbum> albums;
 
 	// Vector headers;
 	DefaultListModel services;
@@ -96,7 +96,7 @@ public class Browser extends JFrame implements ServiceListener,
 	JLabel devicesFound;
 	JComboBox serviceAlbums;
 	JLabel serviceAlbumsTitle;
-	PhotoAlbum selectedAlbum;
+	TargetAlbum selectedAlbum;
 	JButton sendButton;
 	int count = 0;
 	private ServiceInfo selectedService;
@@ -107,7 +107,7 @@ public class Browser extends JFrame implements ServiceListener,
 	{
 		super(Localizer.sharedLocalizer().localizedString("SelectDevice"));
 		this.jmmdns = JmmDNS.Factory.getInstance();
-		albums = new ArrayList<PhotoAlbum>();
+		albums = new ArrayList<TargetAlbum>();
 		Color bg = new Color(230, 230, 230);
 		EmptyBorder border = new EmptyBorder(5, 5, 5, 5);
 		Container content = getContentPane();
@@ -478,7 +478,7 @@ public class Browser extends JFrame implements ServiceListener,
     	try
 			{
     		albums.clear();
-    		albums.add(new PhotoAlbum("", Localizer.sharedLocalizer().localizedString("LoadingList"), 0));
+    		albums.add(new TargetAlbumLoadingIndicator());
     		setServiceAlbums();
       	serviceAlbums.setVisible(true);
       	serviceAlbumsTitle.setVisible(true);
@@ -489,22 +489,55 @@ public class Browser extends JFrame implements ServiceListener,
 	          protected void onResponseComplete() throws IOException
 	          {
 	              int status = getResponseStatus();
-	              if (status == 200 && getResponseContent().startsWith("["))
+	              System.out.println("Status = " + status);
+              	System.out.println(getResponseContent());
+	              if (status == 200 && getResponseContent().startsWith("{"))
 	              {
 	              	if (selectedService.getServer().equals(getAddress().getHost())) // only if the selected service is still the one which initiated this request
 	              	{
 		              	JSONTokener tokener = new JSONTokener(getResponseContent());
 		              	try
 										{
-											JSONArray arr = new JSONArray(tokener);
-											if (arr.length() > 0)
-											{
-												for (int i = 0; i < arr.length(); i++)
-												{
-													JSONObject obj = arr.getJSONObject(i);
-													albums.add(new PhotoAlbum(obj.getString("id"), obj.getString("name"), obj.getInt("roll")));
-												}
-											}
+		              		JSONObject obj = new JSONObject(tokener);
+		              		if (obj.get("mode") != null)
+		              		{
+		              			if (obj.get("mode").equals("folder"))
+		              			{
+													JSONArray arr = (JSONArray)(obj.get("folders"));
+													if (arr.length() > 0)
+													{
+														for (int i = 0; i < arr.length(); i++)
+														{
+															JSONObject folder = arr.getJSONObject(i);
+															albums.add(new TargetAlbumFolder(folder.getString("FolderUuid"), folder.getBoolean("FolderActive"),folder.getString("FolderTitle"),folder.getString("FolderPath")));
+														}
+													}
+		              			}
+		              			else if (obj.get("mode").equals("iphoto"))
+		              			{
+													JSONArray arr = (JSONArray)(obj.get("folders"));
+													if (arr.length() > 0)
+													{
+														for (int i = 0; i < arr.length(); i++)
+														{
+															JSONObject iphoto = arr.getJSONObject(i);
+															albums.add(new TargetAlbumiPhoto(iphoto.getString("FolderUuid"), iphoto.getBoolean("FolderActive"),iphoto.getString("FolderTitle"),iphoto.getString("FolderType")));
+														}
+													}
+		              			}
+		              			else if (obj.get("mode").equals("aperture"))
+		              			{
+													JSONArray arr = (JSONArray)(obj.get("folders"));
+													if (arr.length() > 0)
+													{
+														for (int i = 0; i < arr.length(); i++)
+														{
+															JSONObject aperture = arr.getJSONObject(i);
+															albums.add(new TargetAlbumAperture(aperture.getString("FolderUuid"), aperture.getBoolean("FolderActive"),aperture.getString("FolderTitle"),aperture.getString("FolderType")));
+														}
+													}
+		              			}
+		              		}
 										}
 										catch (JSONException e)
 										{
@@ -520,6 +553,32 @@ public class Browser extends JFrame implements ServiceListener,
 	              		return;
 	              	}
 	              }
+	              else if (status == 200 && getResponseContent().startsWith("["))
+	              {
+	              	if (selectedService.getServer().equals(getAddress().getHost())) // only if the selected service is still the one which initiated this request
+	              	{
+		              	JSONTokener tokener = new JSONTokener(getResponseContent());
+		              	try
+										{
+											JSONArray arr = new JSONArray(tokener);
+											if (arr.length() > 0)
+											{
+												for (int i = 0; i < arr.length(); i++)
+												{
+													JSONObject obj = arr.getJSONObject(i);
+													albums.add(new TargetAlbumiOS(obj.getString("id"), obj.getString("name"), obj.getInt("roll")));
+												}
+											}
+										}
+										catch (JSONException e)
+										{
+											// TODO Auto-generated catch block
+											e.printStackTrace();
+										}
+		              	albums.remove(0);
+		            		setServiceAlbums();
+	              	}
+	              }
 	              else
 	              {
 	              	serviceAlbums.setVisible(false);
@@ -527,10 +586,22 @@ public class Browser extends JFrame implements ServiceListener,
 	              }
 	          }
 	      };
-	    	exchange.setMethod("PUT");
-	    	exchange.setRequestContent(new ByteArrayBuffer("get albums".getBytes()));
-	    	exchange.setRequestContentType("application/json");
+
+				String system = service.getPropertyString(Prefs.sharedPrefs().getAppPrefs()
+						.get(Prefs.PREF_SERVICE_PROPERTY_SYSTEM, "system"));
 	      exchange.setURL(address);
+				if (isComputer(system))
+				{
+					exchange.setMethod("GET");
+		      System.out.println("GET " + address.toString());
+				}
+				else
+				{
+					exchange.setMethod("PUT");
+		    	exchange.setRequestContent(new ByteArrayBuffer("albumList".getBytes()));
+		    	exchange.setRequestContentType("application/json");
+		      System.out.println("PUT " + address.toString());
+				}
 	      client.send(exchange);
 			}
 			catch (Exception e)
@@ -544,16 +615,20 @@ public class Browser extends JFrame implements ServiceListener,
 	@Override
 	public void valueChanged(ListSelectionEvent e)
 	{
-		int row = table.getSelectedRow();
-		if (row > -1)
+		if (!e.getValueIsAdjusting())
 		{
-			setSelectedService(((ServicesTableModel) table.getModel()).getServiceInfoAt(row));
-		}
-		else
-		{
-			setSelectedService(null);
-    	serviceAlbums.setVisible(false);
-    	serviceAlbumsTitle.setVisible(false);
+			int row = table.getSelectedRow();
+			System.out.println("Value changed " + row + ": " + e.toString());
+			if (row > -1)
+			{
+				setSelectedService(((ServicesTableModel) table.getModel()).getServiceInfoAt(row));
+			}
+			else
+			{
+				setSelectedService(null);
+	    	serviceAlbums.setVisible(false);
+	    	serviceAlbumsTitle.setVisible(false);
+			}
 		}
 	}
 	
@@ -562,9 +637,9 @@ public class Browser extends JFrame implements ServiceListener,
 		serviceAlbums.removeAllItems();
 		for (int i = 0; i < albums.size(); i++)
 		{
-			PhotoAlbum album = albums.get(i);
+			TargetAlbum album = albums.get(i);
 			serviceAlbums.addItem(album);
-			if (1 == album.getRoll()) serviceAlbums.setSelectedIndex(i);
+			if (album.isFolderActive()) serviceAlbums.setSelectedIndex(i);
 		}
 		if (0 == albums.size())
 		{
@@ -577,7 +652,7 @@ public class Browser extends JFrame implements ServiceListener,
 	public void itemStateChanged(ItemEvent arg0)
 	{
     if (arg0.getStateChange() == ItemEvent.SELECTED) {
-      selectedAlbum = (PhotoAlbum)serviceAlbums.getSelectedItem();
+      selectedAlbum = (TargetAlbum)serviceAlbums.getSelectedItem();
   		sendButton.setEnabled(true);
     }
     else
