@@ -665,6 +665,6 @@ public class Browser extends JFrame implements ServiceListener,
 	protected void startSending()
 	{
 		closeWindow();
-		TransferWindow transfer = new TransferWindow(selectedService.getName(), selectedService, filesToTransfer);
+		TransferWindow transfer = new TransferWindow(selectedService.getName(), selectedService, selectedAlbum, filesToTransfer);
 	}
 }

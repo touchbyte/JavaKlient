@@ -19,11 +19,16 @@ import javax.swing.JMenuItem;
 import javax.swing.SwingConstants;
 import javax.swing.UIManager;
 
+import org.apache.http.HttpVersion;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.params.BasicHttpParams;
+import org.apache.http.params.HttpParams;
+import org.apache.http.params.HttpProtocolParams;
 import org.apache.sanselan.ImageFormat;
 import org.apache.sanselan.ImageReadException;
 import org.apache.sanselan.Sanselan;
 
-public class MainWindow extends JFrame {
+public class MainWindow extends JFrame implements HttpPutTransferListener {
 
 	public MainWindow() throws HeadlessException {
 		try {
@@ -147,6 +152,7 @@ public class MainWindow extends JFrame {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				//display.setText(count + "");
+			
 			}
 		});
 
@@ -175,6 +181,34 @@ public class MainWindow extends JFrame {
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
 		new MainWindow();
+	}
+
+	@Override
+	public void onTransferFinished()
+	{
+		// TODO Auto-generated method stub
+		System.out.println("Transfer finished");
+	}
+
+	@Override
+	public void onTransfer(long transferredSize, long totalSize)
+	{
+		// TODO Auto-generated method stub
+		System.out.println("Transferred " + transferredSize + " of " + totalSize);
+	}
+
+	@Override
+	public void onStartTransferFinished()
+	{
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onStopTransferFinished()
+	{
+		// TODO Auto-generated method stub
+		
 	}
 
 }
