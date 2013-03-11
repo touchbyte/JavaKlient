@@ -43,9 +43,11 @@ import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
+import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
@@ -97,7 +99,18 @@ public class Browser extends JFrame implements ServiceListener,
 	JComboBox serviceAlbums;
 	JLabel serviceAlbumsTitle;
 	TargetAlbum selectedAlbum;
+	JPanel manualSelectionPanel;
+	JLabel manualSelectionStep1;
+	JLabel manualSelectionStep2;
+	JLabel manualSelectionStep3;
+	JTextField addressField;
+	JTextField portField;
+	JButton checkAddressButton;
+	JLabel checkAddressErrorLabel;
+	JLabel checkAddressSuccessLabel;
+	JLabel addressProtocolLabel;
 	JButton sendButton;
+	JScrollPane scrollPane;
 	int count = 0;
 	private ServiceInfo selectedService;
 	private ServiceInfo transferService;
@@ -108,10 +121,31 @@ public class Browser extends JFrame implements ServiceListener,
 		super(Localizer.sharedLocalizer().localizedString("SelectDevice"));
 		this.jmmdns = JmmDNS.Factory.getInstance();
 		albums = new ArrayList<TargetAlbum>();
-		Color bg = new Color(230, 230, 230);
-		EmptyBorder border = new EmptyBorder(5, 5, 5, 5);
+		automaticSelection();
+		setLocation(100, 100);
+
+		// this.jmmdns.addServiceTypeListener(this);
+		this.jmmdns.addServiceListener(
+				Prefs.sharedPrefs().getAppPrefs().get(Prefs.PREF_SERVICE_TYPE, ""),
+				this);
+
+		/*
+		 * // register some well known types // String list[] = new String[] {
+		 * "_http._tcp.local.", "_ftp._tcp.local.", "_tftp._tcp.local.",
+		 * "_ssh._tcp.local.", "_smb._tcp.local.", "_printer._tcp.local.",
+		 * "_airport._tcp.local.", "_afpovertcp._tcp.local.", "_ichat._tcp.local.",
+		 * // "_eppc._tcp.local.", "_presence._tcp.local.", "_rfb._tcp.local.",
+		 * "_daap._tcp.local.", "_touchcs._tcp.local." }; String[] list = new
+		 * String[] { "_photosync._tcp.local." };
+		 * 
+		 * for (int i = 0; i < list.length; i++) {
+		 * this.jmmdns.registerServiceType(list[i]); }
+		 */
+	}
+	
+	protected void automaticSelection()
+	{
 		Container content = getContentPane();
-				
 		FormLayout layout = new FormLayout("80px, 8px, 40px, 8px, 160px, 20px, 100px, 10px, 70px, right:30px", // columns
 				"top:15px, top:80px, 8px, p, 8px, p, 8px, p, 14px, p"); // rows
 		PanelBuilder builder = new PanelBuilder(layout);
@@ -141,6 +175,21 @@ public class Browser extends JFrame implements ServiceListener,
 				Localizer.sharedLocalizer().localizedString("Manual") };
 		for (int i = 0; i < switchActions.length; i++)
 			modeSwitch.addItem(switchActions[i]);
+		modeSwitch.addItemListener( new ItemListener() {
+	        public void itemStateChanged( ItemEvent e ) {
+	          JComboBox selectedChoice = (JComboBox)e.getSource();
+	          if ( selectedChoice.getSelectedItem().equals(Localizer.sharedLocalizer().localizedString("Manual")))
+	          {
+	        	// manual
+	        	  manualSelection();
+	          }
+	          else
+	          {
+	        	// automatic
+	        	  automaticSelection();
+	          }
+	        }
+	      } );
 		builder.add(modeSwitch, cc.xy(5, 4));
 
 		String[] columnNames = {
@@ -154,7 +203,7 @@ public class Browser extends JFrame implements ServiceListener,
 		table.getSelectionModel().addListSelectionListener(this);
 		table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 		// table.setFillsViewportHeight(true);
-		JScrollPane scrollPane = new JScrollPane(table);
+		scrollPane = new JScrollPane(table);
 		scrollPane
 				.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 		scrollPane
@@ -163,6 +212,9 @@ public class Browser extends JFrame implements ServiceListener,
 		scrollPane.getViewport().setBackground(Color.WHITE);
 		builder.add(scrollPane, cc.xyw(1, 6, 10));
 
+		manualSelectionPanel = new JPanel();
+		manualSelectionPanel.setSize(new Dimension(500,150));
+		
 		devicesFound = new JLabel();
 		devicesFound.setFont(new Font("Helvetica", Font.PLAIN, 12));
 		devicesFound.setText("");
@@ -183,6 +235,7 @@ public class Browser extends JFrame implements ServiceListener,
 
   	serviceAlbums.setVisible(false);
   	serviceAlbumsTitle.setVisible(false);
+  	
 
 		JButton cancelButton = new JButton();
 		cancelButton.setText(Localizer.sharedLocalizer().localizedString("Cancel"));
@@ -204,28 +257,122 @@ public class Browser extends JFrame implements ServiceListener,
 		sendButton.setEnabled(false);
 		builder.add(sendButton, cc.xyw(9, 10, 2));
 
+		content.removeAll();
 		content.add(builder.getPanel());
 		setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-		setLocation(100, 100);
-		// setSize(600, 400);
+	}
+	
+	protected void manualSelection()
+	{
+		Container content = getContentPane();
+		FormLayout layout = new FormLayout("80px, 8px, 40px, 8px, 160px, 20px, 100px, 10px, 70px, right:30px", // columns
+				"top:15px, top:80px, 8px, p, 18px, p, 12px, p, 12px, p, 12px, p, 8px, p, 14px, p"); // rows
+		PanelBuilder builder = new PanelBuilder(layout);
+		builder.border(Borders.DIALOG);
+		CellConstraints cc = new CellConstraints();
+		JLabel picLabel = new JLabel(createImageIcon("/images/browsericon.png"));
+		builder.add(picLabel, cc.xywh(1, 1, 1, 2));
+		JLabel header = new JLabel();
+		header.setFont(new Font("Helvetica", Font.BOLD, 13));
+		header.setText(Localizer.sharedLocalizer().localizedString(
+				"SelectTheDeviceHeader"));
+		builder.add(header, cc.xyw(3, 1, 4));
+		JLabel instructions = new JLabel();
+		instructions.setFont(new Font("Helvetica", Font.PLAIN, 13));
+		instructions.setText("<html>"+Localizer.sharedLocalizer().localizedString(
+				"SelectTheDevice")+"</html>");
+		builder.add(
+				instructions,
+				cc.xyw(3, 2, 8));
+		
+		builder.addLabel(
+				Localizer.sharedLocalizer().localizedString("SearchForDevices"),
+				cc.xyw(1, 4, 3));
+		JComboBox modeSwitch = new JComboBox();
+		String[] switchActions = {
+				Localizer.sharedLocalizer().localizedString("Automatic"),
+				Localizer.sharedLocalizer().localizedString("Manual") };
+		for (int i = 0; i < switchActions.length; i++)
+			modeSwitch.addItem(switchActions[i]);
+		modeSwitch.setSelectedIndex(1);
+		modeSwitch.addItemListener( new ItemListener() {
+	        public void itemStateChanged( ItemEvent e ) {
+	          JComboBox selectedChoice = (JComboBox)e.getSource();
+	          if ( selectedChoice.getSelectedItem().equals(Localizer.sharedLocalizer().localizedString("Manual")))
+	          {
+	        	// manual
+	        	  manualSelection();
+	          }
+	          else
+	          {
+	        	// automatic
+	        	  automaticSelection();
+	          }
+	        }
+	      } );
+		builder.add(modeSwitch, cc.xy(5, 4));
 
-		// this.jmmdns.addServiceTypeListener(this);
-		this.jmmdns.addServiceListener(
-				Prefs.sharedPrefs().getAppPrefs().get(Prefs.PREF_SERVICE_TYPE, ""),
-				this);
+		manualSelectionStep1 = new JLabel();
+		manualSelectionStep1.setFont(new Font("Helvetica", Font.PLAIN, 15));
+		manualSelectionStep1.setText(Localizer.sharedLocalizer().localizedString(
+				"manualSelectionStep1"));
+		builder.add(manualSelectionStep1, cc.xyw(1, 6, 10));
+		manualSelectionStep2 = new JLabel();
+		manualSelectionStep2.setFont(new Font("Helvetica", Font.PLAIN, 15));
+		manualSelectionStep2.setText(Localizer.sharedLocalizer().localizedString(
+				"manualSelectionStep2"));
+		builder.add(manualSelectionStep2, cc.xyw(1, 8, 10));
+		manualSelectionStep3 = new JLabel();
+		manualSelectionStep3.setFont(new Font("Helvetica", Font.PLAIN, 15));
+		manualSelectionStep3.setText(Localizer.sharedLocalizer().localizedString(
+				"manualSelectionStep3"));
+		builder.add(manualSelectionStep3, cc.xyw(1, 10, 10));
+		
+		devicesFound = new JLabel();
+		devicesFound.setFont(new Font("Helvetica", Font.PLAIN, 12));
+		devicesFound.setText("");
+	  builder.add(devicesFound, cc.xyw(1, 14, 5));
 
-		/*
-		 * // register some well known types // String list[] = new String[] {
-		 * "_http._tcp.local.", "_ftp._tcp.local.", "_tftp._tcp.local.",
-		 * "_ssh._tcp.local.", "_smb._tcp.local.", "_printer._tcp.local.",
-		 * "_airport._tcp.local.", "_afpovertcp._tcp.local.", "_ichat._tcp.local.",
-		 * // "_eppc._tcp.local.", "_presence._tcp.local.", "_rfb._tcp.local.",
-		 * "_daap._tcp.local.", "_touchcs._tcp.local." }; String[] list = new
-		 * String[] { "_photosync._tcp.local." };
-		 * 
-		 * for (int i = 0; i < list.length; i++) {
-		 * this.jmmdns.registerServiceType(list[i]); }
-		 */
+	  busyIndicator = new JXBusyLabel();
+	  busyIndicator.setToolTipText(Localizer.sharedLocalizer().localizedString("SearchingForDevices"));
+	  busyIndicator.setBusy(true);
+	  builder.add(busyIndicator, cc.xy(10, 14));
+		
+	  serviceAlbumsTitle = new JLabel();
+	  serviceAlbumsTitle.setText(Localizer.sharedLocalizer().localizedString("Album") + ":");
+		builder.add(serviceAlbumsTitle, cc.xy(1, 15));
+	  
+	  serviceAlbums = new JComboBox();
+	  serviceAlbums.addItemListener(this);
+		builder.add(serviceAlbums, cc.xyw(3, 16, 3));
+
+  	serviceAlbums.setVisible(false);
+  	serviceAlbumsTitle.setVisible(false);
+  	
+
+		JButton cancelButton = new JButton();
+		cancelButton.setText(Localizer.sharedLocalizer().localizedString("Cancel"));
+		cancelButton.addActionListener(new ActionListener() {
+      public void actionPerformed(ActionEvent e)
+      {
+      	closeWindow();
+      }
+		});      
+		builder.add(cancelButton, cc.xy(7, 16));
+		sendButton = new JButton();
+		sendButton.setText(Localizer.sharedLocalizer().localizedString("Send"));
+		sendButton.addActionListener(new ActionListener() {
+      public void actionPerformed(ActionEvent e)
+      {
+      	startSending();
+      }
+		});      
+		sendButton.setEnabled(false);
+		builder.add(sendButton, cc.xyw(9, 16, 2));
+
+		content.removeAll();
+		content.add(builder.getPanel());
+		setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 	}
 	
 	protected void closeWindow()
